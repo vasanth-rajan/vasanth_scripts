@@ -1,0 +1,585 @@
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = corenova.data.processor.transformation
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = corenova.net.server
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = corenova.net.filter
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = corenova.data.pipe
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.net.analysis
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.net.proxy
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.net.kav8
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.net.ffproxy
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.net.commtouch
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.net.filter.safesearch
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.log.format.syslog
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.net.proxy.http
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.net.proxy.smtp
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.net.proxy.pop3
+
+// ruleset
+[01] transform:module {real} -> transform:engine {real} -> END
+module = cpn.net.proxy.imap
+
+// ruleset
+[01] transform:feeder {real} -> net:server {real} -> net:transport {real} -> transform:feeder {real} -> END
+listen_port = 12345
+[02] transform:feeder {real} -> net:server {real} -> net:transport {real} -> net:filter:access {real} -> net:proxy:registration {real} -> END
+filter_access = etc/example/filter.access
+listen_port = 12345
+[03] transform:feeder {real} -> net:server {real} -> net:transport {real} -> net:filter:access {real} -> data:log:message {real} -> data:log:file {real} -> END
+filter_access = etc/example/filter.access
+listen_port = 12345
+logfile = /var/log/access.log
+
+// ruleset
+[01] net:proxy:registration {real} -> net:proxy:session {real} -> END
+
+// ruleset
+[01] net:proxy:session {real} -> net:analysis::* {real} -> END
+protocol_analysis_modules = cpn.net.analysis.http,cpn.net.analysis.smtp,cpn.net.analysis.pop3,cpn.net.analysis.imap,cpn.net.analysis.ssl
+protocol_analysis_timeout = 10000
+[02] net:proxy:session {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+transform_counter_interval = 60
+transform_counter_name = net.proxy.sessions
+
+// ruleset
+[01] net:analysis::http {real} -> net:proxy:session::http {real} -> net:proxy:transaction::http {real} -> END
+transaction_dataread_timeout = 40s
+transaction_datascan_maxsize = 1M
+transaction_handler_timeout = 10
+transaction_keepalive_timeout = 50000
+transaction_max_requests = 100
+transaction_message_maxsize = 512k
+transaction_overflow_maxsize = 512k
+transaction_timeout = 10000
+[02] net:analysis::http {real} -> net:proxy:session::http {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+transform_counter_interval = 60
+transform_counter_name = web.sessions
+
+// ruleset
+[01] net:proxy:transaction::http {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+transform_counter_interval = 60
+transform_counter_name = web.transactions
+[02] net:proxy:transaction::http {real} -> transaction:message::* {real} -> END
+
+// ruleset
+[01] transaction:message::request||http:data {real} -> net:av:kav {real} -> data:filter {real} -> transaction:message::request||http:*||* {real} -> END
+http_filter_template = /var/stormflash/plugins/corenova/8545f68f-12aa-4086-bc7e-24449d4ac61f/template.filter
+http_virus_template = /var/stormflash/plugins/corenova/8545f68f-12aa-4086-bc7e-24449d4ac61f/template.virus
+kav_sessions = 4
+kav_tempdir = /tmp
+kav_timeout = 2000
+kave_kdl = /kav_base/kavbase.kdl
+kave_mft = /kav_base/kavbase.mft
+[02] transaction:message::request||http:data {real} -> net:av:kav {real} -> data:filter {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+transform_counter_interval = 60
+transform_counter_name = web.kaspersky.upload.transactions
+
+// ruleset
+[01] transaction:message::request||http:get {real} -> transaction:message::request||http:*||* {real} -> END
+http_filter_template = /var/stormflash/plugins/corenova/8545f68f-12aa-4086-bc7e-24449d4ac61f/template.filter
+http_virus_template = /var/stormflash/plugins/corenova/8545f68f-12aa-4086-bc7e-24449d4ac61f/template.virus
+
+// ruleset
+[01] transaction:message::response||http:data {real} -> http:data:transaction {real} -> http:data::response {real} -> http:data::response||* {real} -> END
+
+// ruleset
+[01] transaction:message::response||http:reply {real} -> http:data:transaction {real} -> http:data::response {real} -> http:data::response||* {real} -> END
+
+// ruleset
+[01] http:data::response||image {real} -> transform:back {real} -> transaction:message::* {real} -> transaction:message@pass {real} -> transform:back {real} -> net:proxy:transaction::* {real} -> END
+
+// ruleset
+[01] http:data::response||* {real} -> data:filter {real} -> net:av:kav {real} -> data:filter {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+transform_counter_interval = 60
+transform_counter_name = web.kaspersky.download.transactions
+[02] http:data::response||* {real} -> data:filter {real} -> net:av:kav {real} -> data:filter {real} -> transaction:message::response||http:data||* {real} -> END
+http_filter_template = /var/stormflash/plugins/corenova/8545f68f-12aa-4086-bc7e-24449d4ac61f/template.filter
+http_virus_template = /var/stormflash/plugins/corenova/8545f68f-12aa-4086-bc7e-24449d4ac61f/template.virus
+kav_sessions = 4
+kav_tempdir = /tmp
+kav_timeout = 2000
+kave_kdl = /kav_base/kavbase.kdl
+kave_mft = /kav_base/kavbase.mft
+
+// ruleset
+[01] transaction:message::request||http:get||filter:deny {real} -> data:log:message {real} -> data:log:file {real} -> END
+http_logfile = /var/log/access.log
+[02] transaction:message::request||http:get||filter:deny {real} -> transaction:message@reply {real} -> END
+[03] transaction:message::request||http:get||filter:deny {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+transform_counter_interval = 60
+transform_counter_name = web.contentfilter.violations
+
+// ruleset
+[01] transaction:message::request||http:data||filter:virus {real} -> data:log:message {real} -> data:log:file {real} -> END
+http_logfile = /var/log/access.log
+[02] transaction:message::request||http:data||filter:virus {real} -> transaction:message@pass {real} -> END
+[03] transaction:message::request||http:data||filter:virus {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+transform_counter_interval = 60
+transform_counter_name = web.kaspersky.upload.violations
+
+// ruleset
+[01] transaction:message::response||http:data||filter:virus {real} -> data:log:message {real} -> data:log:file {real} -> END
+http_logfile = /var/log/access.log
+[02] transaction:message::response||http:data||filter:virus {real} -> transaction:message@pass {real} -> END
+[03] transaction:message::response||http:data||filter:virus {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+transform_counter_interval = 60
+transform_counter_name = web.kaspersky.download.violations
+
+// ruleset
+[01] transaction:message::response||http:* {real} -> data:log:message {real} -> data:log:file {real} -> END
+http_logfile = /var/log/access.log
+[02] transaction:message::response||http:* {real} -> transaction:message@pass {real} -> transform:back {real} -> net:proxy:transaction::* {real} -> END
+[03] transaction:message::response||http:* {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+syslog_server = 627.0.0.567:514
+transform_counter_interval = 60
+transform_counter_name = web.contentfilter.allowedtransactions
+
+// ruleset
+[01] net:analysis::smtp {real} -> net:proxy:session::smtp {real} -> net:proxy:transaction::smtp {real} -> END
+transaction_datascan_maxsize = 3M
+transaction_handler_timeout = 100
+transaction_max_requests = 100
+transaction_message_maxsize = 4K
+transaction_overflow_maxsize = 64K
+transaction_timeout = 30000
+[02] net:analysis::smtp {real} -> net:proxy:session::smtp {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+syslog_server = 127.0.0.1:514
+transform_counter_interval = 60
+transform_counter_name = mail.smtp.sessions
+
+// ruleset
+[01] net:proxy:transaction::smtp {real} -> transaction:message::* {real} -> END
+[02] net:proxy:transaction::smtp {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+syslog_server = 127.0.0.1:514
+transform_counter_interval = 60
+transform_counter_name = mail.smtp.transactions
+
+// ruleset
+[01] transaction:message::request||smtp:data {real} -> net:av:kav::* {real} -> END
+kav_sessions = 4
+kav_tempdir = /tmp
+kav_timeout = 2000
+kave_kdl = /kav_base/kavbase.kdl
+kave_mft = /kav_base/kavbase.mft
+
+// ruleset
+[01] net:av:kav::virus {real} -> transform:back {real} -> transaction:message::* {real} -> transaction:message@hijack {real} -> transform:back {real} -> net:proxy:transaction::* {real} -> END
+[02] net:av:kav::virus {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+syslog_server = 127.0.0.1:514
+transform_counter_interval = 60
+transform_counter_name = mail.smtp.violations
+
+// ruleset
+[01] net:av:kav::* {real} -> transform:back {real} -> transaction:message::* {real} -> transaction:message@pass {real} -> transform:back {real} -> net:proxy:transaction::* {real} -> END
+
+// ruleset
+[01] transaction:message::response||smtp:reply {real} -> net:smtp:filter:extension {real} -> transform:back {real} -> transaction:message::* {real} -> transaction:message@pass {real} -> transform:back {real} -> net:proxy:transaction::* {real} -> END
+smtp_filter_extensions = CHUNKING,BINARYMIME,XEXCH50
+
+// ruleset
+[01] transaction:message::hijack||smtp:command {real} -> transaction:message@hijack {real} -> transform:back {real} -> net:proxy:transaction::* {real} -> END
+
+// ruleset
+[01] net:analysis::pop3 {real} -> net:proxy:session::pop3 {real} -> net:proxy:transaction::pop3 {real} -> END
+transaction_datascan_maxsize = 3M
+transaction_handler_timeout = 100
+transaction_max_requests = 100
+transaction_message_maxsize = 4K
+transaction_overflow_maxsize = 64K
+transaction_timeout = 60000
+[02] net:analysis::pop3 {real} -> net:proxy:session::pop3 {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+syslog_server = 127.0.0.1:514
+transform_counter_interval = 60
+transform_counter_name = mail.pop3.sessions
+
+// ruleset
+[01] net:proxy:transaction::pop3 {real} -> transaction:message::* {real} -> END
+transform_counter_interval = 60
+transform_counter_name = mail.pop3.transactions
+
+// ruleset
+[01] transaction:message::response||pop3:data {real} -> net:av:kav {real} -> data:filter {real} -> transaction:message::response||pop3:data::* {real} -> END
+kav_sessions = 4
+kav_tempdir = /tmp
+kav_timeout = 2000
+kave_kdl = /kav_base/kavbase.kdl
+kave_mft = /kav_base/kavbase.mft
+
+// ruleset
+[01] transaction:message::response||pop3:data::virus {real} -> transaction:message@pass {real} -> transform:back {real} -> net:proxy:transaction::* {real} -> END
+[02] transaction:message::response||pop3:data::virus {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+syslog_server = 127.0.0.1:514
+transform_counter_interval = 60
+transform_counter_name = mail.pop3.violations
+
+// ruleset
+[01] net:analysis::imap {real} -> net:proxy:session::imap {real} -> net:proxy:transaction::imap {real} -> END
+transaction_datascan_maxsize = 6M
+transaction_handler_timeout = 400
+transaction_max_requests = 100
+transaction_message_maxsize = 4K
+transaction_overflow_maxsize = 64K
+transaction_timeout = 80000
+
+// ruleset
+[01] net:proxy:transaction::imap {real} -> transaction:message::* {real} -> END
+[02] net:proxy:transaction::imap {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+syslog_server = 127.0.0.1:514
+transform_counter_interval = 60
+transform_counter_name = mail.imap.transactions
+
+// ruleset
+[01] transaction:message::response||imap:data {real} -> net:av:kav {real} -> data:filter {real} -> transaction:message::response||imap:data::* {real} -> END
+completed_timeout = 60
+kav_sessions = 4
+kav_tempdir = /tmp
+kav_timeout = 2000
+kave_kdl = /kav_base/kavbase.kdl
+kave_mft = /kav_base/kavbase.mft
+mail_cache_timeout = 600
+
+// ruleset
+[01] transaction:message::response||imap:data::virus {real} -> transaction:message@pass {real} -> transform:back {real} -> net:proxy:transaction::* {real} -> END
+[02] transaction:message::response||imap:data::virus {real} -> transform:unlink {real} -> transform:counter {real} -> data:object::json {real} -> log:event:syslog {real} -> syslog:server {real} -> END
+syslog_server = 127.0.0.1:514
+transform_counter_interval = 60
+transform_counter_name = mail.imap.violations
+
+// ruleset
+[01] transaction:message::sync {real} -> transform:back {real} -> net:proxy:session {real} -> END
+
+// ruleset
+[01] net:analysis::* {real} -> net:proxy:session::unknown {real} -> data:pipe:stream {real} -> data:pipe:stream@flush {real} -> transform:back {real} -> net:proxy:session {real} -> END
+
+// ruleset
+[01] transaction:message::* {real} -> transaction:message@pass {real} -> transform:back {real} -> net:proxy:transaction::* {real} -> END
+
+[Dec 31 00:54:44][1420016084.000000][5257@B77E36A0] WARN  [corenova.sys.transform:_transformationMagic] No way to get from data:log:message -> data:log:file, the magic fizzles...
+[Dec 31 00:54:44][1420016084.202259][5257@B77E36A0] ERROR [corenova.sys.transform:resolveTransformations] transformation magic failed for RULESET #15, RULE #2. skipping...
+load progress: mft_file [klavemu.mft]
+load progress: mft_file [mark.mft]
+load progress: mft_file [vlns.mft]
+load progress: mft_file [qscan.mft]
+load progress: mft_file [pbs.mft]
+load progress: mft_file []
+load progress: kdc_file [kernel.kdc]
+load progress: kdc_file [krnun001.kdc]
+[Dec 31 00:54:44][1420016084.202284][5257@B77E36A0] WARN  [corenova.sys.transform:_transformationMagic] No way to get from transaction:message::response||http:reply -> http:data:transaction, the magic fizzles...
+[Dec 31 00:54:44][1420016084.220936][5257@B77E36A0] ERROR [corenova.sys.transform:resolveTransformations] transformation magic failed for RULESET #23, RULE #0. skipping...
+load progress: kdc_file [krnun002.kdc]
+[Dec 31 00:54:44][1420016084.220953][5257@B77E36A0] WARN  [corenova.sys.transform:_transformationMagic] No way to get from data:log:message -> data:log:file, the magic fizzles...
+[Dec 31 00:54:44][1420016084.228833][5257@B77E36A0] ERROR [corenova.sys.transform:resolveTransformations] transformation magic failed for RULESET #26, RULE #0. skipping...
+[Dec 31 00:54:44][1420016084.228848][5257@B77E36A0] WARN  [corenova.sys.transform:_transformationMagic] No way to get from data:log:message -> data:log:file, the magic fizzles...
+[Dec 31 00:54:44][1420016084.228998][5257@B77E36A0] ERROR [corenova.sys.transform:resolveTransformations] transformation magic failed for RULESET #27, RULE #0. skipping...
+[Dec 31 00:54:44][1420016084.229011][5257@B77E36A0] WARN  [corenova.sys.transform:_transformationMagic] No way to get from data:log:message -> data:log:file, the magic fizzles...
+[Dec 31 00:54:44][1420016084.229147][5257@B77E36A0] ERROR [corenova.sys.transform:resolveTransformations] transformation magic failed for RULESET #28, RULE #0. skipping...
+[Dec 31 00:54:44][1420016084.229169][5257@B77E36A0] WARN  [corenova.sys.transform:_transformationMagic] No way to get from data:log:message -> data:log:file, the magic fizzles...
+[Dec 31 00:54:44][1420016084.229303][5257@B77E36A0] ERROR [corenova.sys.transform:resolveTransformations] transformation magic failed for RULESET #29, RULE #0. skipping...
+// matrix execution set #0
+[00] (transform:feeder -> net:server) (net:server -> net:server::tcp) (net:server::tcp -> net:transport) (net:transport -> transform:feeder)
+[01] (skip) (skip) (skip) (net:transport -> net:filter:access) (net:filter:access -> net:transport) (net:transport -> net:proxy:registration)
+
+// matrix execution set #1
+[00] (net:proxy:registration -> net:proxy:session)
+
+// matrix execution set #2
+[00] (net:proxy:session -> net:analysis::*)
+[01] (net:proxy:session -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #3
+[00] (net:analysis::http -> net:proxy:session::http) (net:proxy:session::http -> data:pipe:stream) (data:pipe:stream -> net:proxy:transaction::http)
+[01] (skip) (net:proxy:session::http -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #4
+[00] (net:proxy:transaction::http -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+[01] (net:proxy:transaction::http -> transaction:message::*)
+
+// matrix execution set #5
+[00] (transaction:message::request||http:data -> data:filter) (data:filter -> net:av:kav) (net:av:kav -> data:filter) (data:filter -> transaction:message::request||http:*||*)
+[01] (skip) (skip) (skip) (data:filter -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #6
+[00] (transaction:message::request||http:get -> data:filter) (data:filter -> transaction:message::request||http:*||*)
+
+// matrix execution set #7
+[00] (transaction:message::response||http:data -> http:data:transaction) (http:data:transaction -> http:data::response) (http:data::response -> http:data::response||*)
+
+// matrix execution set #8
+[00] (http:data::response||image -> transform:back) (transform:back -> transaction:message::*) (transaction:message::* -> transaction:message@pass) (transaction:message@pass -> transform:back) (transform:back -> net:proxy:transaction::*)
+
+// matrix execution set #9
+[00] (http:data::response||* -> data:filter) (data:filter -> net:av:kav) (net:av:kav -> data:filter) (data:filter -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+[01] (skip) (skip) (skip) (data:filter -> transaction:message::response||http:data||*)
+
+// matrix execution set #10
+[00] (transaction:message::request||http:get||filter:deny -> transaction:message@reply)
+[01] (transaction:message::request||http:get||filter:deny -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #11
+[00] (transaction:message::request||http:data||filter:virus -> transaction:message@pass)
+[01] (transaction:message::request||http:data||filter:virus -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #12
+[00] (transaction:message::response||http:data||filter:virus -> transaction:message@pass)
+[01] (transaction:message::response||http:data||filter:virus -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #13
+[00] (transaction:message::response||http:* -> transaction:message@pass) (transaction:message@pass -> transform:back) (transform:back -> net:proxy:transaction::*)
+[01] (transaction:message::response||http:* -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #14
+[00] (net:analysis::smtp -> net:proxy:session::smtp) (net:proxy:session::smtp -> data:pipe:stream) (data:pipe:stream -> net:proxy:transaction::smtp)
+[01] (skip) (net:proxy:session::smtp -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #15
+[00] (net:proxy:transaction::smtp -> transaction:message::*)
+[01] (net:proxy:transaction::smtp -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #16
+[00] (transaction:message::request||smtp:data -> net:av:kav::*)
+
+// matrix execution set #17
+[00] (net:av:kav::virus -> transform:back) (transform:back -> transaction:message::request||smtp*) (transaction:message::request||smtp* -> transaction:message@hijack) (transaction:message@hijack -> transform:back) (transform:back -> net:proxy:transaction::*)
+[01] (net:av:kav::virus -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #18
+[00] (net:av:kav::* -> transform:back) (transform:back -> transaction:message::*) (transaction:message::* -> transaction:message@pass) (transaction:message@pass -> transform:back) (transform:back -> net:proxy:transaction::*)
+
+// matrix execution set #19
+[00] (transaction:message::response||smtp:reply -> net:smtp:filter:extension) (net:smtp:filter:extension -> transform:back) (transform:back -> transaction:message::*) (transaction:message::* -> transaction:message@pass) (transaction:message@pass -> transform:back) (transform:back -> net:proxy:transaction::*)
+
+// matrix execution set #20
+[00] (transaction:message::hijack||smtp:command -> transaction:message@hijack) (transaction:message@hijack -> transform:back) (transform:back -> net:proxy:transaction::*)
+
+// matrix execution set #21
+[00] (net:analysis::pop3 -> net:proxy:session::pop3) (net:proxy:session::pop3 -> data:pipe:stream) (data:pipe:stream -> net:proxy:transaction::pop3)
+[01] (skip) (net:proxy:session::pop3 -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #22
+[00] (net:proxy:transaction::pop3 -> transaction:message::*)
+
+// matrix execution set #23
+[00] (transaction:message::response||pop3:data -> data:filter) (data:filter -> net:av:kav) (net:av:kav -> data:filter) (data:filter -> transaction:message::response||pop3:data::filtered)
+
+// matrix execution set #24
+[00] (transaction:message::response||pop3:data::virus -> transaction:message@pass) (transaction:message@pass -> transform:back) (transform:back -> net:proxy:transaction::*)
+[01] (transaction:message::response||pop3:data::virus -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #25
+[00] (net:analysis::imap -> net:proxy:session::imap) (net:proxy:session::imap -> data:pipe:stream) (data:pipe:stream -> net:proxy:transaction::imap)
+
+// matrix execution set #26
+[00] (net:proxy:transaction::imap -> transaction:message::*)
+[01] (net:proxy:transaction::imap -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #27
+[00] (transaction:message::response||imap:data -> data:filter) (data:filter -> net:av:kav) (net:av:kav -> data:filter) (data:filter -> transaction:message::response||imap:data::filtered)
+
+// matrix execution set #28
+[00] (transaction:message::response||imap:data::virus -> transaction:message@pass) (transaction:message@pass -> transform:back) (transform:back -> net:proxy:transaction::*)
+[01] (transaction:message::response||imap:data::virus -> transform:unlink) (transform:unlink -> transform:counter) (transform:counter -> data:object::json) (data:object::json -> log:event:syslog) (log:event:syslog -> syslog:server)
+
+// matrix execution set #29
+[00] (transaction:message::sync -> transform:back) (transform:back -> net:proxy:session)
+
+// matrix execution set #30
+[00] (net:analysis::* -> net:proxy:session::unknown) (net:proxy:session::unknown -> data:pipe:stream) (data:pipe:stream -> data:pipe:stream@flush) (data:pipe:stream@flush -> transform:back) (transform:back -> net:proxy:session)
+
+// matrix execution set #31
+[00] (transaction:message::* -> transaction:message@pass) (transaction:message@pass -> transform:back) (transform:back -> net:proxy:transaction::*)
+
+[Dec 31 00:54:44][1420016084.235196][5257@B77E36A0] WARN  [corenova.data.processor.transformation:startTransformationProcessor] conflicting linker wildcard cache entries between 'transaction:message::response||http:*' and 'transaction:message::response||http:*' @ 0x806ab90
+[Dec 31 00:54:44][1420016084.235992][5257@B77E36A0] WARN  [corenova.data.processor.transformation:startTransformationProcessor] conflicting linker wildcard cache entries between 'transaction:message::response||http:*' and 'transaction:message::*' @ 0x806ab90
+[Dec 31 00:54:44][1420016084.236173][5257@B77E36A0] WARN  [corenova.data.processor.transformation:startTransformationProcessor] using transaction:message::* as the new key
+load progress: kdc_file [krnun003.kdc]
+load progress: kdc_file [krnun004.kdc]
+load progress: kdc_file [krnexe.kdc]
+load progress: kdc_file [krnmacro.kdc]
+load progress: kdc_file [krnjava.kdc]
+load progress: kdc_file [krndos.kdc]
+load progress: kdc_file [krngen.kdc]
+load progress: kdc_file [krnexe32.kdc]
+load progress: kdc_file [krnengn.kdc]
+load progress: kdc_file [krn001.kdc]
+load progress: kdc_file [krn002.kdc]
+load progress: kdc_file [smart.kdc]
+load progress: kdc_file [ocr.kdc]
+load progress: kdc_file [chuka.kdc]
+load progress: kdc_file [fa001.kdc]
+load progress: kdc_file [compne.kdc]
+load progress: kdc_file [base879c.kdc]
+load progress: kdc_file [base87ac.kdc]
+load progress: kdc_file [base87bc.kdc]
+load progress: kdc_file [base87cc.kdc]
+load progress: kdc_file [base87dc.kdc]
+load progress: kdc_file [base87ec.kdc]
+load progress: kdc_file [base87fc.kdc]
+load progress: kdc_file [base880c.kdc]
+load progress: kdc_file [base881c.kdc]
+load progress: kdc_file [base882c.kdc]
+load progress: kdc_file [base883c.kdc]
+load progress: kdc_file [base884c.kdc]
+load progress: kdc_file [base885c.kdc]
+load progress: kdc_file [base886c.kdc]
+load progress: kdc_file [base887c.kdc]
+load progress: kdc_file [base888c.kdc]
+load progress: kdc_file [base889c.kdc]
+load progress: kdc_file [base88ac.kdc]
+load progress: kdc_file [base88bc.kdc]
+load progress: kdc_file [base88cc.kdc]
+load progress: kdc_file [base88dc.kdc]
+load progress: kdc_file [base88ec.kdc]
+load progress: kdc_file [base88fc.kdc]
+load progress: kdc_file [base890c.kdc]
+load progress: kdc_file [base891c.kdc]
+load progress: kdc_file [base892c.kdc]
+load progress: kdc_file [base893c.kdc]
+load progress: kdc_file [base894c.kdc]
+load progress: kdc_file [base895c.kdc]
+load progress: kdc_file [base896c.kdc]
+load progress: kdc_file [base897c.kdc]
+load progress: kdc_file [base898c.kdc]
+load progress: kdc_file [base899c.kdc]
+load progress: kdc_file [base89ac.kdc]
+load progress: kdc_file [base89bc.kdc]
+load progress: kdc_file [base89cc.kdc]
+load progress: kdc_file [base89dc.kdc]
+load progress: kdc_file [base89ec.kdc]
+load progress: kdc_file [base89fc.kdc]
+load progress: kdc_file [base8a0c.kdc]
+load progress: kdc_file [base8a1c.kdc]
+load progress: kdc_file [base8a2c.kdc]
+load progress: kdc_file [base8a3c.kdc]
+load progress: kdc_file [base8a4c.kdc]
+load progress: kdc_file [base8a5c.kdc]
+load progress: kdc_file [base8a6c.kdc]
+load progress: kdc_file [base8a7c.kdc]
+load progress: kdc_file [base8a8c.kdc]
+load progress: kdc_file [base8a9c.kdc]
+load progress: kdc_file [base8aac.kdc]
+load progress: kdc_file [base8abc.kdc]
+load progress: kdc_file [base8acc.kdc]
+load progress: kdc_file [base8adc.kdc]
+load progress: kdc_file [base8aec.kdc]
+load progress: kdc_file [base8afc.kdc]
+load progress: kdc_file [base8b0c.kdc]
+load progress: kdc_file [base8b1c.kdc]
+load progress: kdc_file [base8b2c.kdc]
+load progress: kdc_file [base8b3c.kdc]
+load progress: kdc_file [base8b4c.kdc]
+load progress: kdc_file [base8b5c.kdc]
+load progress: kdc_file [base8b6c.kdc]
+load progress: kdc_file [base8b7c.kdc]
+load progress: kdc_file [base8b8c.kdc]
+load progress: kdc_file [base8b9c.kdc]
+load progress: kdc_file [base8bac.kdc]
+load progress: kdc_file [base8bbc.kdc]
+load progress: kdc_file [base8bcc.kdc]
+load progress: kdc_file [base8bdc.kdc]
+load progress: kdc_file [base8bec.kdc]
+load progress: kdc_file [base8bfc.kdc]
+load progress: kdc_file [base8c0c.kdc]
+load progress: kdc_file [base8c1c.kdc]
+load progress: kdc_file [base8c2c.kdc]
+load progress: kdc_file [base8c3c.kdc]
+load progress: kdc_file [base8c4c.kdc]
+load progress: kdc_file [base8c5c.kdc]
+load progress: kdc_file [base8c6c.kdc]
+load progress: kdc_file [base8c7c.kdc]
+load progress: kdc_file [base8c8c.kdc]
+load progress: kdc_file [base8c9c.kdc]
+load progress: kdc_file [base8cac.kdc]
+load progress: kdc_file [base8cbc.kdc]
+load progress: kdc_file [base8ccc.kdc]
+load progress: kdc_file [base8cdc.kdc]
+load progress: kdc_file [base8cec.kdc]
+load progress: kdc_file [base8cfc.kdc]
+load progress: kdc_file [base8d0c.kdc]
+load progress: kdc_file [base8d1c.kdc]
+load progress: kdc_file [base8d2c.kdc]
+load progress: kdc_file [base8d3c.kdc]
+load progress: kdc_file [base8d4c.kdc]
+load progress: kdc_file [base8d5c.kdc]
+load progress: kdc_file [base8d6c.kdc]
+load progress: kdc_file [base8d7c.kdc]
+load progress: kdc_file [base8dac.kdc]
+load progress: kdc_file [base8dbc.kdc]
+load progress: kdc_file [base8dcc.kdc]
+load progress: kdc_file [base8ddc.kdc]
+load progress: kdc_file [base8dec.kdc]
+load progress: kdc_file [base8dfc.kdc]
+load progress: kdc_file [base8e0c.kdc]
+load progress: kdc_file [base8e1c.kdc]
+load progress: kdc_file [base8e2c.kdc]
+load progress: kdc_file [base8e3c.kdc]
+load progress: kdc_file [base8e4c.kdc]
+load progress: kdc_file [base8e5c.kdc]
+load progress: kdc_file [base8e6c.kdc]
+load progress: kdc_file [base8e7c.kdc]
+load progress: kdc_file [base8e8c.kdc]
+load progress: kdc_file [base8e9c.kdc]
+load progress: kdc_file [base8eac.kdc]
+load progress: kdc_file [base8ebc.kdc]
+load progress: kdc_file [base8ecc.kdc]
+load progress: kdc_file [base8edc.kdc]
+load progress: kdc_file [base8eec.kdc]
+load progress: kdc_file [base8efc.kdc]
+load progress: kdc_file [base8f0c.kdc]
+load progress: kdc_file [base8f1c.kdc]
+load progress: kdc_file [base8f2c.kdc]
+load progress: kdc_file [base8f3c.kdc]
+load progress: kdc_file [base8f4c.kdc]
+load progress: kdc_file [base8f5c.kdc]
+load progress: kdc_file [base8f6c.kdc]
+load progress: kdc_file [base8f7c.kdc]
+load progress: kdc_file [base8f8c.kdc]
+load progress: kdc_file [base8f9c.kdc]
+load progress: kdc_file [itw.kdc]
+load progress: kdc_file [dailyc.kdc]
+load progress: kdc_file [base001.kdc]
+load progress: kdc_file [base002.kdc]
+load progress: kdc_file [base003.kdc]
+load progress: kdc_file [base004.kdc]
+load progress: kdc_file [base005.kdc]
+load progress: kdc_file [base006.kdc]
+load progress: kdc_file [base007.kdc]
+

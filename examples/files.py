@@ -3,9 +3,11 @@ import os
 import re
 import time
 
-fileDir = os.getcwd ()
-print fileDir
+fileDir = os.getcwd()
+print(fileDir)
 pythonFiles = glob.glob ("%s/*.txt" %fileDir)
+
+print(pythonFiles);
 
 while (True): 
 
@@ -14,20 +16,20 @@ while (True):
 
 #rePattern = re.compile (r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}") 
 
-    rePattern = re.compile (r"((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)")
+    rePattern = re.compile(r"^((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)")
     lineNo = 0
 
     for fileInput in pythonFiles:
-        f0 = open(fileInput, "r")
-        fileContent = f0.read()
-        f0.close()
+        with open(fileInput) as f0:
+            fileContent = f0.read()
 
         singleLine = fileContent.split("\n")
         for line in singleLine:
             lineNo = lineNo + 1
-            find = re.search (r"((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)", line)
+            find = rePattern.search(line)
             if find:
-                print find.group(0), lineNo
+                print(find.group())
+                print(lineNo)
                 break
 r"""       
         singleLine.remove(line)
